@@ -23,9 +23,15 @@ Quick Deployment Guide for SonicScope Latest Multvendor engine.
 
   Optional keys the customer can add to licence.env:
   MAXMIND_KEY=<free MaxMind key>          # enables GeoIP enrichment automatically
+  
   SMTP_HOST=smtp.their-isp.co.za          # pre-configures email delivery
+  
   SMTP_PORT=465
+  
   SMTP_USER=reports@customer.co.za
+  
   SMTP_PASSWORD=<password>
+  
   SMTP_FROM=reports@customer.co.za
+  
   SMTP_USE_TLS=true
