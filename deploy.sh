@@ -161,7 +161,10 @@ printf  "  ${TEAL}║${NC}  %-66s${TEAL}║${NC}\n" "Email:     $([ -n "$SMTP_HO
 echo -e "  ${TEAL}╚══════════════════════════════════════════════════════════════════╝${NC}"
 echo
 echo -e "  Press ${BOLD}Enter${NC} to begin deployment or ${BOLD}Ctrl+C${NC} to abort."
-read -r
+# Read from /dev/tty so the prompt works when the script is piped via curl | bash.
+# Without this, bash and read compete for the same stdin pipe, causing read to
+# consume script lines and skip them during execution.
+read -r </dev/tty 2>/dev/null || true
 
 # ── Step 1: Download ─────────────────────────────────────────────────────────
 
@@ -175,12 +178,19 @@ TARBALL_PATH="$DOWNLOAD_DIR/$TARBALL"
 info "Source: github.com/sonicscope/production"
 info "Package: $TARBALL"
 
-(curl -fsSL --progress-bar "${REPO_URL}/${TARBALL}" -o "$TARBALL_PATH") &
-spinner $! "Downloading"
-wait $! || fail "Download failed. Check your internet connection and that github.com/sonicscope/production is accessible."
+# Redirect stdin to /dev/null so the background curl does not inherit the
+# script pipe when this script is run via curl | bash.
+(curl -fsSL "${REPO_URL}/${TARBALL}" -o "$TARBALL_PATH" </dev/null) &
+DL_PID=$!
+spinner $DL_PID "Downloading"
+wait $DL_PID || fail "Download failed. Check your internet connection and that github.com/sonicscope/production is accessible."
+
+[[ -s "$TARBALL_PATH" ]] || fail "Downloaded file is empty — possible network error or repository access issue."
 
 # Detect version from tarball
-DETECTED_VER=$(tar -tzf "$TARBALL_PATH" 2>/dev/null | head -1 | cut -d'/' -f1 | sed 's/ss-multivendor-//')
+DETECTED_VER=$(tar -tzf "$TARBALL_PATH" 2>/dev/null | head -1 | cut -d'/' -f1 | sed 's/ss-multivendor-//') || \
+    fail "Downloaded file is not a valid SonicScope package (tar failed). Try re-running deploy.sh."
+[[ -n "$DETECTED_VER" ]] || fail "Could not detect version from package — tarball may be corrupt."
 ok "Downloaded: ss-multivendor ${DETECTED_VER} ($(du -sh "$TARBALL_PATH" | cut -f1))"
 
 # ── Step 2: Extract ──────────────────────────────────────────────────────────
