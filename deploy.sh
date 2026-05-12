@@ -98,17 +98,20 @@ echo
 
 # Detect Ubuntu version
 if ! grep -qi ubuntu /etc/os-release 2>/dev/null; then
-    fail "This installer requires Ubuntu 22.04 or 24.04 LTS."
+    fail "This installer requires Ubuntu 22.04 LTS or later."
 fi
 UBUNTU_VER=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2)
-if [[ "$UBUNTU_VER" != "22.04" && "$UBUNTU_VER" != "24.04" ]]; then
-    warn "Ubuntu $UBUNTU_VER detected. Supported versions: 22.04, 24.04. Continuing anyway..."
+UBUNTU_MAJOR=$(echo "$UBUNTU_VER" | cut -d'.' -f1)
+if [[ "$UBUNTU_MAJOR" -lt 22 ]]; then
+    fail "Ubuntu $UBUNTU_VER is not supported. Requires Ubuntu 22.04 or later."
 else
-    ok "Ubuntu $UBUNTU_VER LTS"
+    ok "Ubuntu $UBUNTU_VER"
 fi
 
-# Locate licence.env — same directory as this script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Locate licence.env — same directory as this script.
+# ${BASH_SOURCE[0]:-$0} falls back to $0 when BASH_SOURCE is unset
+# (e.g. some sudo + bash combinations on newer Ubuntu releases).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 LICENCE_ENV="${SCRIPT_DIR}/licence.env"
 [[ -f "$LICENCE_ENV" ]] || fail "licence.env not found in $SCRIPT_DIR — please place your licence file next to deploy.sh"
 ok "Licence file: $LICENCE_ENV"
