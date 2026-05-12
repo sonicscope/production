@@ -187,10 +187,12 @@ wait $DL_PID || fail "Download failed. Check your internet connection and that g
 
 [[ -s "$TARBALL_PATH" ]] || fail "Downloaded file is empty — possible network error or repository access issue."
 
-# Detect version from tarball
-DETECTED_VER=$(tar -tzf "$TARBALL_PATH" 2>/dev/null | head -1 | cut -d'/' -f1 | sed 's/ss-multivendor-//') || \
-    fail "Downloaded file is not a valid SonicScope package (tar failed). Try re-running deploy.sh."
-[[ -n "$DETECTED_VER" ]] || fail "Could not detect version from package — tarball may be corrupt."
+# Detect version from tarball.
+# || true suppresses pipefail: head -1 closes the pipe early which sends SIGPIPE
+# to tar (exit 141), making pipefail consider the pipeline failed even though
+# the first line was captured correctly.
+DETECTED_VER=$(tar -tzf "$TARBALL_PATH" 2>/dev/null | head -1 | cut -d'/' -f1 | sed 's/ss-multivendor-//') || true
+[[ -n "$DETECTED_VER" ]] || fail "Downloaded file is not a valid SonicScope package — could not detect version. The file may be corrupt or truncated."
 ok "Downloaded: ss-multivendor ${DETECTED_VER} ($(du -sh "$TARBALL_PATH" | cut -f1))"
 
 # ── Step 2: Extract ──────────────────────────────────────────────────────────
