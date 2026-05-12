@@ -187,12 +187,17 @@ wait $DL_PID || fail "Download failed. Check your internet connection and that g
 
 [[ -s "$TARBALL_PATH" ]] || fail "Downloaded file is empty — possible network error or repository access issue."
 
-# Detect version from tarball.
-# || true suppresses pipefail: head -1 closes the pipe early which sends SIGPIPE
-# to tar (exit 141), making pipefail consider the pipeline failed even though
-# the first line was captured correctly.
-DETECTED_VER=$(tar -tzf "$TARBALL_PATH" 2>/dev/null | head -1 | cut -d'/' -f1 | sed 's/ss-multivendor-//') || true
-[[ -n "$DETECTED_VER" ]] || fail "Downloaded file is not a valid SonicScope package — could not detect version. The file may be corrupt or truncated."
+# Verify the file is a valid gzip archive before attempting to read it.
+# Show the actual file type in the error to help diagnose download issues
+# (e.g. GitHub returning HTML, an LFS pointer, or a truncated file).
+if ! gzip -t "$TARBALL_PATH" 2>/dev/null; then
+    fail "Downloaded file is not a valid gzip archive. Got: $(file "$TARBALL_PATH" 2>&1 | cut -d: -f2-). Check network connectivity and try again."
+fi
+
+# Detect version: use sed -n '1p' (reads all tar output) rather than head -1
+# to avoid sending SIGPIPE to tar which triggers pipefail even on success.
+DETECTED_VER=$(tar -tzf "$TARBALL_PATH" 2>/dev/null | sed -n '1p' | cut -d'/' -f1 | sed 's/ss-multivendor-//')
+[[ -n "$DETECTED_VER" ]] || fail "Could not detect version from package — tarball may be corrupt."
 ok "Downloaded: ss-multivendor ${DETECTED_VER} ($(du -sh "$TARBALL_PATH" | cut -f1))"
 
 # ── Step 2: Extract ──────────────────────────────────────────────────────────
