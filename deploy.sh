@@ -263,6 +263,13 @@ if [[ -n "$SMTP_HOST" ]]; then
     ok "SMTP configured: $SMTP_HOST:$SMTP_PORT"
 fi
 
+# Restore correct permissions — sed -i rewrites the file from scratch which
+# resets ownership to root:root 644. The Flask app (ss-collector user) needs
+# group write access to update the allowlist when firewalls are registered.
+chown root:ss-collector "$CONFIG_FILE"
+chmod 660 "$CONFIG_FILE"
+ok "collector.env permissions restored (660 root:ss-collector)"
+
 # ── Step 5: Start collector ──────────────────────────────────────────────────
 
 step 5 "Starting collector"
