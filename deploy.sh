@@ -109,9 +109,14 @@ else
 fi
 
 # Locate licence.env — same directory as this script.
-# ${BASH_SOURCE[0]:-$0} falls back to $0 when BASH_SOURCE is unset
-# (e.g. some sudo + bash combinations on newer Ubuntu releases).
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# When piped via "curl | bash", BASH_SOURCE array is completely unset and
+# $0 is just "bash". Fall back to the current working directory so that
+# licence.env is found wherever the command was run.
+if [[ -n "${BASH_SOURCE+x}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR="$(pwd)"
+fi
 LICENCE_ENV="${SCRIPT_DIR}/licence.env"
 [[ -f "$LICENCE_ENV" ]] || fail "licence.env not found in $SCRIPT_DIR — please place your licence file next to deploy.sh"
 ok "Licence file: $LICENCE_ENV"
