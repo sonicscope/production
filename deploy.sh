@@ -28,9 +28,9 @@ banner() {
     echo
     echo -e "${TEAL}  ╔══════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${TEAL}  ║${NC}                                                                  ${TEAL}║${NC}"
-    echo -e "${TEAL}  ║${NC}   ${BOLD}${WHITE}◈  S O N I C S C O P E  ◈${NC}                                   ${TEAL}║${NC}"
-    echo -e "${TEAL}  ║${NC}      ${DIM}Multi-Vendor Network Reporter${NC}                              ${TEAL}║${NC}"
-    echo -e "${TEAL}  ║${NC}      ${DIM}Deployment Installer${NC}                                       ${TEAL}║${NC}"
+    echo -e "${TEAL}  ║${NC}   ${BOLD}${WHITE}◈  S O N I C S C O P E  ◈${NC}                                      ${TEAL}║${NC}"
+    echo -e "${TEAL}  ║${NC}      ${DIM}Multi-Vendor Network Reporter${NC}                               ${TEAL}║${NC}"
+    echo -e "${TEAL}  ║${NC}      ${DIM}Deployment Installer${NC}                                        ${TEAL}║${NC}"
     echo -e "${TEAL}  ║${NC}                                                                  ${TEAL}║${NC}"
     echo -e "${TEAL}  ╚══════════════════════════════════════════════════════════════════╝${NC}"
     echo
