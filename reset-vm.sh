@@ -37,6 +37,32 @@ echo
 read -r -p "  Type YES to continue: " confirm
 [[ "$confirm" == "YES" ]] || { echo "Aborted."; exit 0; }
 
+# ── Reclaim apt/dpkg from any hung/leftover deploy ────────────────────────────
+# A previous deploy that hung (e.g. on a slow download) or was Ctrl-C'd can leave
+# a process holding the dpkg/apt lock, or dpkg half-configured — which would make
+# THIS reset's own apt-get calls hang too, and would carry over to the next
+# deploy. Clear all of that before doing anything with apt.
+section "Reclaiming apt/dpkg from any leftover deploy"
+
+for pat in deploy.sh install.sh install-reports.sh install-grafana; do
+    pkill -f "$pat" 2>/dev/null && ok "Killed leftover process: $pat"
+done
+sleep 2
+for proc in apt-get apt dpkg unattended-upgr; do
+    pkill -9 -x "$proc" 2>/dev/null && warn "Force-killed stuck $proc"
+done
+
+# Drop stale lock files only if nothing still holds them.
+for lock in /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend \
+            /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
+    if [ -e "$lock" ] && ! fuser "$lock" >/dev/null 2>&1; then
+        rm -f "$lock" && info "Cleared stale lock: $lock"
+    fi
+done
+
+# Repair any interrupted dpkg state (a Ctrl-C'd apt leaves packages half-configured).
+DEBIAN_FRONTEND=noninteractive dpkg --configure -a 2>/dev/null && ok "dpkg state repaired"
+
 # ── SonicScope services ───────────────────────────────────────────────────────
 section "Stopping and removing SonicScope services"
 for svc in ss-collector ss-reports; do
@@ -96,8 +122,12 @@ ok "PostgreSQL data directories removed"
 # ── APT sources and keys ──────────────────────────────────────────────────────
 section "Removing APT sources"
 rm -f /etc/apt/sources.list.d/pgdg.list \
+      /etc/apt/sources.list.d/pgdg.sources \
       /etc/apt/sources.list.d/timescaledb.list \
       /etc/apt/sources.list.d/grafana.list \
+      /etc/apt/sources.list.d/grafana.sources \
+      /etc/apt/trusted.gpg.d/timescaledb.gpg \
+      /etc/apt/keyrings/grafana.gpg \
       /usr/share/keyrings/postgresql.gpg \
       /usr/share/keyrings/timescaledb.gpg 2>/dev/null
 apt-get update -qq 2>/dev/null
