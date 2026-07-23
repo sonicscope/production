@@ -180,7 +180,8 @@ info "Package: $TARBALL"
 
 # Redirect stdin to /dev/null so the background curl does not inherit the
 # script pipe when this script is run via curl | bash.
-(curl -fsSL "${REPO_URL}/${TARBALL}" -o "$TARBALL_PATH" </dev/null) &
+(curl -fsSL --connect-timeout 30 --retry 3 --retry-delay 5 --speed-time 60 --speed-limit 1024 \
+    "${REPO_URL}/${TARBALL}" -o "$TARBALL_PATH" </dev/null) &
 DL_PID=$!
 spinner $DL_PID "Downloading"
 wait $DL_PID || fail "Download failed. Check your internet connection and that github.com/sonicscope/production is accessible."
