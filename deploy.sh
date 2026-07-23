@@ -216,12 +216,10 @@ ok "Extracted to: $EXTRACT_DIR"
 
 step 3 "Installing system packages and database"
 
-info "This step downloads and installs PostgreSQL, TimescaleDB and Python packages,"
-info "then creates the database schema. Typically ~2–5 minutes on a fast connection,"
-info "but it is download-bound: on a slow or distant Ubuntu mirror it can take 15+"
-info "minutes (or much longer). It is NOT stuck — follow /tmp/ss_install.log to watch"
-info "progress. If it is crawling, Ctrl-C and switch to a faster mirror, e.g.:"
-info "  sudo sed -i 's|<region>.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources"
+info "This step installs PostgreSQL, TimescaleDB and Python packages, then creates"
+info "the database schema — usually ~2–5 minutes. The installer normalises slow"
+info "regional mirrors and fails loud (with the log) if Postgres won't restart, so"
+info "it should not hang. Follow progress in /tmp/ss_install.log."
 echo
 
 (bash "$EXTRACT_DIR/scripts/install.sh" > /tmp/ss_install.log 2>&1) &
