@@ -44,4 +44,4 @@ licensed CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). The lis
 downloaded daily and mapped to SonicScope category names; the derived category data remains
 under CC BY-SA 4.0. SonicWall, Fortinet, Palo Alto and Sophos use their native categories.
 
-Supported operating systems: Ubuntu 22.04 / 24.04 / 26.04 LTS and Debian 13 (trixie, new in 1.4.4; installer fixes through 1.4.6). New in 1.5.0 (current release 1.5.3): Investigate, a bring-your-own-key AI assistant for MSP staff (Settings > AI Assistant).
+Supported operating systems: Ubuntu 22.04 / 24.04 / 26.04 LTS and Debian 13 (trixie, new in 1.4.4; installer fixes through 1.4.6). New in 1.5.0 (current release 1.6.0): Investigate, a bring-your-own-key AI assistant for MSP staff (Settings > AI Assistant). New in 1.6.0: saved and shareable investigations, re-run, CSV export, findings and an attack timeline.
