@@ -124,21 +124,39 @@ else
     SCRIPT_DIR="$(pwd)"
 fi
 LICENCE_ENV="${SCRIPT_DIR}/licence.env"
-[[ -f "$LICENCE_ENV" ]] || fail "licence.env not found in $SCRIPT_DIR — please place your licence file next to deploy.sh"
-ok "Licence file: $LICENCE_ENV"
+
+# An existing SonicScope install is upgraded in place (scripts/upgrade.sh: version gate, backups,
+# automatic rollback). A new install needs licence.env; an upgrade keeps the stored licence and
+# only applies licence.env when one is supplied and differs.
+EXISTING_INSTALL=false
+if [[ -f /opt/ss-multivendor/VERSION || -f /opt/ss-multivendor/main.py ]] && [[ -f /etc/ss-multivendor/collector.env ]]; then
+    EXISTING_INSTALL=true
+    info "Existing SonicScope installation detected: this run will UPGRADE it (data and settings are kept)"
+fi
+if [[ ! -f "$LICENCE_ENV" ]]; then
+    $EXISTING_INSTALL || fail "licence.env not found in $SCRIPT_DIR — please place your licence file next to deploy.sh"
+    info "No licence.env supplied: the stored licence is kept"
+fi
+[[ -f "$LICENCE_ENV" ]] && ok "Licence file: $LICENCE_ENV"
 
 # Parse licence fields
+if [[ -f "$LICENCE_ENV" ]]; then
 LIC_KEY=$(read_env "$LICENCE_ENV" "SONICSCOPE_LICENSE")
 LIC_PRODUCT=$(read_env "$LICENCE_ENV" "SONICSCOPE_PRODUCT" "SS-MULTIVENDOR")
 LIC_CUSTOMER=$(read_env "$LICENCE_ENV" "SONICSCOPE_CUSTOMER_ID")
 LIC_EXPIRY=$(read_env "$LICENCE_ENV" "SONICSCOPE_EXPIRY")
 LIC_SENSORS=$(read_env "$LICENCE_ENV" "SONICSCOPE_MAX_SENSORS" "1")
 
+if [[ -f "$LICENCE_ENV" ]]; then
 [[ -z "$LIC_KEY" ]]      && fail "SONICSCOPE_LICENSE is missing from licence.env"
 [[ -z "$LIC_CUSTOMER" ]] && fail "SONICSCOPE_CUSTOMER_ID is missing from licence.env"
 [[ -z "$LIC_EXPIRY" ]]   && fail "SONICSCOPE_EXPIRY is missing from licence.env"
+fi
 
 ok "Licence valid for: ${BOLD}$LIC_CUSTOMER${NC} — expires ${LIC_EXPIRY} — ${LIC_SENSORS} sensor(s)"
+else
+    LIC_KEY=""; LIC_PRODUCT=""; LIC_CUSTOMER="(stored licence)"; LIC_EXPIRY="(unchanged)"; LIC_SENSORS="-"
+fi
 
 # Optional fields
 MAXMIND_KEY=$(read_env "$LICENCE_ENV" "MAXMIND_KEY")
@@ -189,6 +207,13 @@ TARBALL="ss-multivendor-latest.tar.gz"
 DOWNLOAD_DIR=$(mktemp -d /tmp/sonicscope_deploy_XXXXXX)
 TARBALL_PATH="$DOWNLOAD_DIR/$TARBALL"
 
+# SS_LOCAL_TARBALL=/path/to/ss-multivendor-X.tar.gz installs or upgrades from a local file
+# instead of downloading (air-gapped hosts, release-candidate testing).
+if [[ -n "${SS_LOCAL_TARBALL:-}" ]]; then
+    [[ -s "$SS_LOCAL_TARBALL" ]] || fail "SS_LOCAL_TARBALL is set but '$SS_LOCAL_TARBALL' is not a readable file."
+    info "Source: local file $SS_LOCAL_TARBALL"
+    cp "$SS_LOCAL_TARBALL" "$TARBALL_PATH"
+else
 info "Source: github.com/sonicscope/production"
 info "Package: $TARBALL"
 
@@ -199,6 +224,7 @@ info "Package: $TARBALL"
 DL_PID=$!
 spinner $DL_PID "Downloading"
 wait $DL_PID || fail "Download failed. Check your internet connection and that github.com/sonicscope/production is accessible."
+fi
 
 [[ -s "$TARBALL_PATH" ]] || fail "Downloaded file is empty — possible network error or repository access issue."
 
@@ -226,6 +252,31 @@ wait $!
 EXTRACT_DIR="$DOWNLOAD_DIR/ss-multivendor-${DETECTED_VER}"
 [[ -d "$EXTRACT_DIR" ]] || fail "Extraction failed — directory not found: $EXTRACT_DIR"
 ok "Extracted to: $EXTRACT_DIR"
+
+# ── Upgrade path (existing installation) ──────────────────────────────────────
+# Delegates to scripts/upgrade.sh: version gate, rollback copies, config backup, update.sh,
+# health checks with automatic rollback, TimescaleDB extension update. The first-time steps
+# below (system install, database, TLS, admin account, Grafana password) are NOT run.
+if $EXISTING_INSTALL; then
+    echo
+    echo -e "  ${BOLD}Upgrading the existing installation${NC}"
+    echo -e "  ${DIM}Backups are taken first. If the health checks fail afterwards the upgrade rolls back by itself.${NC}"
+    echo
+    UPG_ARGS=(--yes)
+    [[ -f "$LICENCE_ENV" ]] && UPG_ARGS+=(--apply-licence "$LICENCE_ENV")
+    if bash "$EXTRACT_DIR/scripts/upgrade.sh" "${UPG_ARGS[@]}"; then
+        if [[ -n "$MAXMIND_KEY" && -f "$EXTRACT_DIR/scripts/download-geoip.sh" ]]; then
+            info "Refreshing GeoIP databases (MAXMIND_KEY supplied)"
+            (bash "$EXTRACT_DIR/scripts/download-geoip.sh" "$MAXMIND_KEY" > /tmp/ss_geoip.log 2>&1 \
+                && systemctl restart ss-collector) || warn "GeoIP refresh failed — see /tmp/ss_geoip.log"
+        fi
+        rm -rf "$DOWNLOAD_DIR"
+        echo
+        ok "Upgrade finished. Log: /var/log/ss-multivendor/upgrade-*.log"
+        exit 0
+    fi
+    fail "The upgrade did not complete (it was rolled back where possible). See /var/log/ss-multivendor/upgrade-*.log and the messages above."
+fi
 
 # ── Step 3: System install ───────────────────────────────────────────────────
 
@@ -301,9 +352,11 @@ else
 fi
 
 # Verify licence accepted
-if journalctl -u ss-collector --since "30 seconds ago" | grep -qi "licence valid"; then
+# Capture first: a journalctl-to-quiet-grep pipeline fails on SIGPIPE under pipefail when grep exits early.
+JOURNAL_TXT=$(journalctl -u ss-collector --since "30 seconds ago" 2>/dev/null || true)
+if grep -qi "licence valid" <<<"$JOURNAL_TXT"; then
     ok "Licence validated successfully"
-elif journalctl -u ss-collector --since "30 seconds ago" | grep -qi "expired\|invalid\|violation"; then
+elif grep -qi "expired\|invalid\|violation" <<<"$JOURNAL_TXT"; then
     fail "Licence rejected by collector. Check journalctl -u ss-collector -n 20"
 else
     info "Licence check pending — verify with: sudo journalctl -u ss-collector -f"
